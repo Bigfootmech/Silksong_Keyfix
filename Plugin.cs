@@ -1,7 +1,10 @@
 ﻿using BepInEx;
 using BepInEx.Logging;
+using GlobalEnums;
 using HarmonyLib;
+using HutongGames.PlayMaker;
 using System;
+using UnityEngine;
 
 namespace inventory_key_fix;
 
@@ -17,8 +20,15 @@ public class Plugin : BaseUnityPlugin
 
     public static InventoryPaneList paneListPtr;
     public static InventoryPaneInput lastInst;
+    public static UnityEngine.GameObject inventoryObject;
     public static InventoryPaneList.PaneTypes lastOpen = InventoryPaneList.PaneTypes.None;
-        
+    public static bool snapshot = false;
+    public static FsmVariables savedVars = new FsmVariables();
+
+    public static HutongGames.PlayMaker.Actions.ListenForInventoryShortcut listenForInvShortInst;
+
+    public static string saveState = "None";
+    
     private void Awake()
     {
         // Plugin startup logic
@@ -42,6 +52,7 @@ public class Plugin : BaseUnityPlugin
                 if(lastInst != null)
                         FileLog.Log("lastInst pre is " + lastInst.paneControl.ToString());
                 
+                snapshot = true;
             }
         }
 
@@ -82,7 +93,7 @@ public class Plugin : BaseUnityPlugin
 
                 if(ButtPressed(ia))
                 {
-                    FileLog.Log("Button Press = " + __result.ToString() );
+                    FileLog.Log("InvOpen Button Press = " + __result.ToString() );
                 
                     // if(paneInputPtr != null)
                     //     FileLog.Log("pane control is " + paneInputPtr.paneControl.ToString());
@@ -108,11 +119,11 @@ public class Plugin : BaseUnityPlugin
 
                     if(__result == InventoryPaneList.PaneTypes.Inv)
                     {
-                    
+                        // listenForInvShortInst.StoreShortcut.Value = InventoryShortcutButtons.Inventory;
 
                         // InventoryPane inventoryPane = ___paneList.GetPane(INV_INDEX);
                         if(lastOpen != __result)
-                            FsmSwitchToInv(paneListPtr.gameObject);
+                            FsmSwitchToInv();
 
                 
                         return;
@@ -122,13 +133,6 @@ public class Plugin : BaseUnityPlugin
             } catch (Exception e) {
                 FileLog.Log("Crashed with exception " + e.Message);
             }
-        }
-
-        static void FsmSwitchToInv(UnityEngine.GameObject go)
-        {
-		    PlayMakerFSM playMakerFSM = PlayMakerFSM.FindFsmOnGameObject(go, "Inventory Control");
-		    playMakerFSM.FsmVariables.FindFsmInt("Target Pane Index").Value = INV_INDEX;
-		    playMakerFSM.SendEvent("MOVE PANE TO");
         }
 
         static bool ButtPressed(HeroActions ia)
@@ -141,7 +145,31 @@ public class Plugin : BaseUnityPlugin
 
         }
     }
+
+    static void FsmSwitchToInv()
+    {
+        if(inventoryObject == null) return;
+		PlayMakerFSM playMakerFSM = PlayMakerFSM.FindFsmOnGameObject(inventoryObject, "Inventory Control");
+		playMakerFSM.FsmVariables.FindFsmInt("Target Pane Index").Value = INV_INDEX;
+		playMakerFSM.SendEvent("MOVE PANE TO");
+    }
     
+    [HarmonyPatch(typeof(InventoryPaneInput), "PressCancel")]
+    public class preCloseSwitch
+    {
+
+        [HarmonyPrefix]
+        static bool Prefix(InventoryPaneInput __instance
+            // ,
+            )
+        {
+            FileLog.Log("Not running???");
+            FsmSwitchToInv();
+            FileLog.Log("Closing inventory");
+            return false;
+        }
+    }
+
     [HarmonyPatch(typeof(InventoryPaneInput), "Update")]
     public class OnUpdateDo
     {
@@ -159,7 +187,9 @@ public class Plugin : BaseUnityPlugin
             ) // , ref HeroActions ___ia
         {
             if(paneListPtr == null) paneListPtr = ___paneList;
+            if(inventoryObject == null) inventoryObject = ___paneList.gameObject;
             lastInst = __instance;
+            lastOpen = ___paneControl;
 
             /*
             FileLog.Log("paneControl true is " + ___paneControl.ToString());
@@ -182,12 +212,10 @@ public class Plugin : BaseUnityPlugin
                 
             */
 
-            lastOpen = ___paneControl;
 
         }
 
-        /*
-        [HarmonyPostfix]
+        [HarmonyPrefix]
         static bool Prefix(InventoryPaneInput __instance,
             ref float ___actionCooldown, ref InputHandler ___ih,
             ref Platform ___platform, ref bool ___wasExtraPressed,
@@ -258,32 +286,39 @@ public class Plugin : BaseUnityPlugin
 	        InventoryPaneList.PaneTypes inventoryInputPressed = InventoryPaneInput.GetInventoryInputPressed(inputActions);
 	        if (wasSubmitPressed && menuAction != Platform.MenuActions.Submit)
 	        {
+                FileLog.Log("Custom Update - Release Submit");
 		        __instance.ReleaseSubmit();
 	        }
 	        if (___wasExtraPressed && menuAction != Platform.MenuActions.Extra)
 	        {
+                FileLog.Log("Custom Update - UI EXTRA RELEASED");
 		        FSMUtility.SendEventToGameObject(__instance.gameObject, "UI EXTRA RELEASED");
 		        ___wasExtraPressed = false;
 		        ___isRepeatingDirection = false;
 	        }
 	        else if (inputActions.Right.WasPressed)
 	        {
+                FileLog.Log("Custom Update - Right Pressed");
 		        __instance.PressDirection(InventoryPaneBase.InputEventType.Right);
 	        }
 	        else if (inputActions.Left.WasPressed)
 	        {
+                FileLog.Log("Custom Update - Left Pressed");
 		        __instance.PressDirection(InventoryPaneBase.InputEventType.Left);
 	        }
 	        else if (inputActions.Up.WasPressed)
 	        {
+                FileLog.Log("Custom Update - Up Pressed");
 		        __instance.PressDirection(InventoryPaneBase.InputEventType.Up);
 	        }
 	        else if (inputActions.Down.WasPressed)
 	        {
+                FileLog.Log("Custom Update - Down Pressed");
 		        __instance.PressDirection(InventoryPaneBase.InputEventType.Down);
 	        }
 	        else if (inventoryInputPressed != InventoryPaneList.PaneTypes.None)
 	        {
+                FileLog.Log("Custom Update - PaneButton Pressed");
 		        bool flag = paneControl switch
 		        {
 			        InventoryPaneList.PaneTypes.None => true, 
@@ -311,6 +346,7 @@ public class Plugin : BaseUnityPlugin
 		        }
 		        if (flag)
 		        {
+                    FileLog.Log("PRESSING CANCEL!!?!?");
 			        __instance.PressCancel();
 			        return false;
 		        }
@@ -320,6 +356,8 @@ public class Plugin : BaseUnityPlugin
 	        }
 	        else if (inputActions.RsDown.WasPressed)
 	        {
+                FileLog.Log("Custom Update - UI RS DOWN Pressed");
+
 		        FSMUtility.SendEventToGameObject(__instance.gameObject, "UI RS DOWN");
 		        if (allowRightStickSpeed)
 		        {
@@ -330,6 +368,8 @@ public class Plugin : BaseUnityPlugin
 	        }
 	        else if (inputActions.RsUp.WasPressed)
 	        {
+                FileLog.Log("Custom Update - UI RS UP Pressed");
+
 		        FSMUtility.SendEventToGameObject(__instance.gameObject, "UI RS UP");
 		        if (allowRightStickSpeed)
 		        {
@@ -340,6 +380,8 @@ public class Plugin : BaseUnityPlugin
 	        }
 	        else if (inputActions.RsLeft.WasPressed)
 	        {
+                FileLog.Log("Custom Update - UI RS Left Pressed");
+
 		        if (isInInventory)
 		        {
 			        FSMUtility.SendEventToGameObject(__instance.gameObject, "UI RS LEFT");
@@ -353,6 +395,8 @@ public class Plugin : BaseUnityPlugin
 	        }
 	        else if (inputActions.RsRight.WasPressed)
 	        {
+                FileLog.Log("Custom Update - UI RS RIGHT Pressed");
+
 		        if (isInInventory)
 		        {
 			        FSMUtility.SendEventToGameObject(__instance.gameObject, "UI RS RIGHT");
@@ -366,6 +410,8 @@ public class Plugin : BaseUnityPlugin
 	        }
 	        else if (___isRepeatingDirection)
 	        {
+                FileLog.Log("Custom Update - Repeating Direction Pressed");
+
 		        if (lastPressedDirection switch
 		        {
 			        InventoryPaneBase.InputEventType.Left => inputActions.Left.IsPressed, 
@@ -389,6 +435,8 @@ public class Plugin : BaseUnityPlugin
 	        }
 	        else if (isRepeatingSubmit)
 	        {
+                FileLog.Log("Custom Update - Repeating submit Pressed");
+
 		        ___directionRepeatTimer -= Time.unscaledDeltaTime;
 		        if (___directionRepeatTimer <= 0f)
 		        {
@@ -402,11 +450,8 @@ public class Plugin : BaseUnityPlugin
 		        ___isScrollingFast = false;
 	        }
 
-
-
             return false;
         }
-        */
     }
     
 
@@ -419,7 +464,237 @@ public class Plugin : BaseUnityPlugin
             HutongGames.PlayMaker.Actions.ListenForInventory __instance)
         {
             FileLog.Log("in Hutong");
+            // Isn't called???
+        }
+    }*/
+    
+
+    [HarmonyPatch(typeof(HutongGames.PlayMaker.Actions.ListenForInventoryShortcut), "OnUpdate")]
+    public class HutongGrra
+    {
+        [HarmonyPrefix]
+        static bool Prefix(
+            HutongGames.PlayMaker.Actions.ListenForInventoryShortcut __instance,
+            ref FsmEvent ___WasPressed
+            , ref GameManager ___gm
+            , ref InputHandler ___inputHandler
+            , ref FsmInt ___CurrentPaneIndex
+            , ref FsmEnum ___StoreShortcut
+            )
+        {
+
+            return true;
+        }
+
+        /*
+        [HarmonyPrefix]
+        static bool Prefix(
+            HutongGames.PlayMaker.Actions.ListenForInventoryShortcut __instance,
+            ref FsmEvent ___WasPressed
+            , ref GameManager ___gm
+            , ref InputHandler ___inputHandler
+            , ref FsmInt ___CurrentPaneIndex
+            , ref FsmEnum ___StoreShortcut
+            )
+        {
+            // FileLog.Log("in Hutong 2");
+            // IS CALLED
+            
+	        if (___gm.isPaused)
+	        {
+		        return false;
+	        }
+	        HeroActions inputActions = ___inputHandler.inputActions;
+	        InventoryPaneList.PaneTypes paneTypes = InventoryPaneInput.GetInventoryInputPressed(inputActions);
+	        
+            switch (paneTypes)
+	        {
+	        case InventoryPaneList.PaneTypes.None:
+		        return false;
+	        default:
+		        if (!___CurrentPaneIndex.IsNone && paneTypes != (InventoryPaneList.PaneTypes)___CurrentPaneIndex.Value)
+		        {
+			        return false;
+		        }
+		        break;
+	        case InventoryPaneList.PaneTypes.Inv:
+		        break;
+	        }
+            
+	        if (inputActions.Pause.WasPressed && PlayerData.instance.isInventoryOpen)
+	        {
+		        paneTypes = InventoryPaneList.PaneTypes.Inv;
+	        }
+
+
+            
+            // knocking out entire logic just opens last window
+            // even inv
+
+	        FsmEnum storeShortcut = ___StoreShortcut;
+
+            // FileLog.Log("in Hutong 2 " + storeShortcut.ToString());
+
+	        storeShortcut.Value = // InventoryShortcutButtons.Inventory;
+                paneTypes switch
+	        {
+		        InventoryPaneList.PaneTypes.Inv => InventoryShortcutButtons.Inventory, 
+		        InventoryPaneList.PaneTypes.Tools => InventoryShortcutButtons.Tools, 
+		        InventoryPaneList.PaneTypes.Quests => InventoryShortcutButtons.Quests, 
+		        InventoryPaneList.PaneTypes.Journal => InventoryShortcutButtons.Journal, 
+		        InventoryPaneList.PaneTypes.Map => InventoryShortcutButtons.Map, 
+		        _ => throw new ArgumentOutOfRangeException(), 
+	        };
+
+            FileLog.Log("in Hutong 2 post " + storeShortcut.ToString());
+                // "correctly remembers, but seems to have no effect??
+            FileLog.Log("in Hutong 2 current pane " + ___CurrentPaneIndex.ToString());
+                // also correct, but no effect??
+            
+
+            // knock out all logic = always open to the last one
+            //      no matter which button was pressed
+
+            // ___StoreShortcut.Value = InventoryShortcutButtons.Quests;
+            // ALWAYS opens to Quests :thinking:
+            
+            ___StoreShortcut.Value = InventoryShortcutButtons.Inventory;
+            // COMPLETELY IGNORED
+            // so this logic is probably elsewhere??
+
+
+            // FileLog.Log("event is " + ___WasPressed.ToString());
+            // FileLog.Log("event name is " + ___WasPressed.name.ToString());
+            
+            // FileLog.Log("states are " + __instance.Fsm.States.ToString());
+
+            FileLog.Log("current state = " + __instance.Fsm.activeState.name.ToString());
+            // if CurrentState = "Closed" -- what we're targeting
+
+            
+            //foreach(var state in __instance.Fsm.States)
+            //{
+            //    FileLog.Log("state name: " + state.name);
+            //}
+
+            // FileLog.Log("vars are " + __instance.Fsm.Variables.ToString());
+            
+            if(paneTypes == InventoryPaneList.PaneTypes.Inv)
+            {
+                savedVars = new FsmVariables(__instance.Fsm.Variables);
+            }
+            FileLog.Log("Real: ");
+            foreach(var var in __instance.Fsm.Variables._allVariables)
+            {
+                
+                //if(var.name == "Current Pane Num" || var.name == "Next Pane Num")
+                //{
+                //    var.SetVariable<FsmInt>(var.name, ___CurrentPaneIndex);
+                //}
+                FileLog.Log("var: " + var.name + ", val = " + (var.RawValue == null ? "null" : var.RawValue.ToString()));
+
+            }
+            FileLog.Log("Saved: ");
+            foreach(var var in savedVars._allVariables)
+            {
+                FileLog.Log("var: " + var.name + ", val = " + (var.RawValue == null ? "null" : var.RawValue.ToString()));
+            }
+            
+            // FileLog.Log("evt is " + ___WasPressed.ToString());
+            // FileLog.Log("evt name = " + ___WasPressed.name.ToString());
+            // FileLog.Log("evt path = " + ___WasPressed.Path.ToString());
+
+            __instance.Fsm.Event(___WasPressed);
+            // __instance.Fsm.Event(new FsmEvent("BUTTON PRESSED"));
+                // nope, has to be "correctly formed"
+
+            
+
+            return false;
+        }
+        */
+        
+        
+        [HarmonyPostfix]
+        static void Postfix(
+            HutongGames.PlayMaker.Actions.ListenForInventoryShortcut __instance,
+            ref FsmEvent ___WasPressed
+            , ref GameManager ___gm
+            , ref InputHandler ___inputHandler
+            , ref FsmInt ___CurrentPaneIndex
+            , ref FsmEnum ___StoreShortcut
+            )
+        {
+            if(listenForInvShortInst == null) listenForInvShortInst = __instance;
+            // FileLog.Log("setting shortcut as inv");
+
+
+            // FileLog.Log("current pane = " + ___CurrentPaneIndex.ToString());
+            // FileLog.Log("storeshortcut = " + ___StoreShortcut.Value.ToString());
+            // FileLog.Log("invshortcut = " + InventoryShortcutButtons.Inventory.ToString());
+
+            var tempStore = ___StoreShortcut.Value.ToString();
+            
+            if(NewPaneSelected(___StoreShortcut.Value))
+            {
+                FileLog.Log("----------");
+                FileLog.Log("current state = " + ___StoreShortcut.Value.ToString());
+                FileLog.Log("save state = " + saveState.ToString());
+                
+                ___StoreShortcut.Value = InventoryShortcutButtons.Inventory;
+                // ^-- Breaks all "shortcut" buttons working outside inventory.
+
+                FsmSwitchToInv();
+            }
+            
+            // FileLog.Log("post_msg_state = " + ___StoreShortcut.Value.ToString());
+            // FileLog.Log("temp_store = " + tempStore.ToString());
+            saveState = tempStore;
+            // FileLog.Log("state saved = " + saveState);
+        }
+
+        private static bool NewPaneSelected(Enum newState)
+        {
+            if(newState == null || saveState == null) return false;
+            return newState.ToString() == InventoryShortcutButtons.Inventory.ToString()
+                && saveState.ToString() != InventoryShortcutButtons.Inventory.ToString();
         }
     }
-    */
+    
+    /*
+    [HarmonyPatch(typeof(HutongGames.PlayMaker.Actions.ListenForInventoryShortcut), "OnUpdate")]
+    public class HutongGrrb
+    {
+        [HarmonyPostfix]
+        static void Postfix(
+            HutongGames.PlayMaker.Actions.ListenForInventory __instance)
+        {
+            FileLog.Log("in Hutong");
+        }
+    } */
+    
+    
+
+    [HarmonyPatch(typeof(HutongGames.PlayMaker.Actions.SetCurrentInventoryPane), "OnEnter")]
+    public class SetInvPane
+    {
+        [HarmonyPrefix]
+        static bool Prefix(
+            HutongGames.PlayMaker.Actions.SetCurrentInventoryPane __instance
+            , ref FsmInt ___PaneIndex
+            )
+        {
+            FileLog.Log("Setting current inventory pane");
+            FileLog.Log("Pane Index = " + ___PaneIndex.ToString());
+            if(__instance.PaneIndex.ToInt() == -1)
+            {
+                FileLog.Log("EqualTO -1");
+                __instance.PaneIndex = INV_INDEX;
+            }
+            FileLog.Log("Pane Index = " + ___PaneIndex.ToString());
+            FileLog.Log("/////");
+
+            return true;
+        }
+    }
 }
