@@ -51,32 +51,41 @@ public class Plugin : BaseUnityPlugin
         {
             try {
 
+                // polling time
                 if(ButtPressed(ia))
                 {
-                    if(paneListPtr == null)
-                    {
-                        return;
-                    }
-                    
-			        InventoryPane tryGetPane = paneListPtr.GetPane(__result);
-                    
-			        if (tryGetPane == null || !tryGetPane.IsAvailable)
-			        {
-			            return;
-			        }
+                    // button pressed time
 
-
-                    if(__result == InventoryPaneList.PaneTypes.Inv)
-                    {
-                        if(lastOpen != __result)
-                            FsmSwitchToInv();
+                    if(!SanityCheck(__result))
                         return;
-                    }
+
+                    if(__result != InventoryPaneList.PaneTypes.Inv)
+                        return;
+
+                    if(lastOpen != __result)
+                        FsmSwitchToInv();
                     
                 }
             } catch (Exception e) {
                 // silent
             }
+        }
+
+        static bool SanityCheck(InventoryPaneList.PaneTypes result)
+        {
+            if(paneListPtr == null)
+            {
+                return false;
+            }
+                    
+			InventoryPane tryGetPane = paneListPtr.GetPane(result);
+                    
+			if (tryGetPane == null || !tryGetPane.IsAvailable)
+			{
+			    return false;
+			}
+
+            return true;
         }
 
         static bool ButtPressed(HeroActions ia)
