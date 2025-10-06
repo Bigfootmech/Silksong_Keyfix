@@ -18,12 +18,14 @@ Whereby now, the inventory button will always navigate to the inventory.
 From closed, or from open.
 
 <h1>Changelog:</h1>
+
 - 0.1.0 = base release
 - 0.1.1 = bugfix for interacting with bone bottom quest board before opening inventory
 
 <h1>Links:</h1>
 GitHub: <a href = "https://github.com/Bigfootmech/Silksong_Keyfix">https://github.com/Bigfootmech/Silksong_Keyfix</a> <br />
-NexusMods: <a href = "https://www.nexusmods.com/hollowknightsilksong/mods/359">https://www.nexusmods.com/hollowknightsilksong/mods/359</a>
+NexusMods: <a href = "https://www.nexusmods.com/hollowknightsilksong/mods/359">https://www.nexusmods.com/hollowknightsilksong/mods/359</a> <br />
+Thunderstore: <a href = "https://thunderstore.io/c/hollow-knight-silksong/p/Bigfootmech/Silksong_Keyboard_Inventory_Fix/">https://thunderstore.io/c/hollow-knight-silksong/p/Bigfootmech/Silksong_Keyboard_Inventory_Fix/</a>
 
 <h1>To install:</h1>
 
