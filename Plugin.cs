@@ -60,10 +60,12 @@ public class Plugin : BaseUnityPlugin
                         return;
 
                     if(__result != InventoryPaneList.PaneTypes.Inv)
-                        return;
+                        return; // button pressed is not inv - works as intended
 
-                    if(lastOpen != __result)
-                        FsmSwitchToInv();
+                    if(lastOpen == InventoryPaneList.PaneTypes.Inv)
+                        return; // inv is already open, ignore command (close)
+
+                    FsmSwitchToInv();
                     
                 }
             } catch (Exception e) {
@@ -112,17 +114,23 @@ public class Plugin : BaseUnityPlugin
     {
 
         [HarmonyPostfix]
-        static void Postfix(InventoryPaneInput __instance,
-            ref float ___actionCooldown, ref InputHandler ___ih,
-            ref Platform ___platform, ref bool ___wasExtraPressed,
-            ref bool ___isRepeatingDirection, ref bool ___wasSubmitPressed,
-            ref InventoryPaneList.PaneTypes ___paneControl,
-            ref InventoryPaneList ___paneList, ref bool ___allowRightStickSpeed,
-            ref bool ___isScrollingFast, ref float ___directionRepeatTimer,
-            ref bool ___isInInventory, ref bool ___isRepeatingSubmit,
-            ref InventoryPaneBase.InputEventType ___lastPressedDirection
+        static void Postfix(InventoryPaneInput __instance
+            , ref InventoryPaneList.PaneTypes ___paneControl
+            , ref InventoryPaneList ___paneList
+            // , ref float ___actionCooldown, ref InputHandler ___ih,
+            // ref Platform ___platform, ref bool ___wasExtraPressed,
+            // ref bool ___isRepeatingDirection, ref bool ___wasSubmitPressed, 
+            // ref bool ___allowRightStickSpeed,
+            // ref bool ___isScrollingFast, ref float ___directionRepeatTimer,
+            // ref bool ___isInInventory, ref bool ___isRepeatingSubmit,
+            // ref InventoryPaneBase.InputEventType ___lastPressedDirection
             ) // , ref HeroActions ___ia
         {
+            // polling time
+
+            if(___paneControl == InventoryPaneList.PaneTypes.None) return; // Quest board?? Hello???
+            
+            // get pointers and refs when inv open
             if(paneListPtr == null) paneListPtr = ___paneList;
             if(inventoryObject == null) inventoryObject = ___paneList.gameObject;
             lastInst = __instance;
@@ -135,17 +143,19 @@ public class Plugin : BaseUnityPlugin
     public class SetInvPane
     {
         [HarmonyPrefix]
-        static bool Prefix(
+        static void Prefix(
             HutongGames.PlayMaker.Actions.SetCurrentInventoryPane __instance
-            , ref FsmInt ___PaneIndex
+            // , ref FsmInt ___PaneIndex
             )
         {
-            if(__instance.PaneIndex.ToInt() == -1) // instead of re-open
+            // button pressed time
+
+            // on opening inventory screen
+
+            if(__instance.PaneIndex.ToInt() == -1) // instead of re-open last,
             {
                 __instance.PaneIndex = INV_INDEX; // open inv
             }
-
-            return true;
         }
     }
 }
